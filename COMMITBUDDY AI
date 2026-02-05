@@ -1,27 +1,7 @@
 import streamlit as st
-import requests
 
 # =========================
-# OLLAMA CONFIG
-# =========================
-OLLAMA_URL = "http://localhost:11434/api/generate"
-MODEL = "phi3"   # fast & stable
-
-def call_llm(prompt):
-    try:
-        payload = {
-            "model": MODEL,
-            "prompt": prompt,
-            "stream": False
-        }
-        res = requests.post(OLLAMA_URL, json=payload, timeout=60)
-        res.raise_for_status()
-        return res.json()["response"]
-    except Exception as e:
-        return f"❌ Error: {e}"
-
-# =========================
-# STREAMLIT CONFIG
+# PAGE CONFIG
 # =========================
 st.set_page_config(
     page_title="CommitBuddy AI",
@@ -29,11 +9,50 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("🥗 CommitBuddy AI")
-st.caption("Personalized Nutrition & Commitment Assistant")
+# =========================
+# CUSTOM CSS (MATCH LOOK)
+# =========================
+st.markdown("""
+<style>
+.big-title {
+    font-size: 42px;
+    font-weight: 700;
+}
+
+.subtitle {
+    color: #9aa0a6;
+    font-size: 16px;
+}
+
+.creator {
+    font-size: 18px;
+    color: #c9d1d9;
+}
+</style>
+""", unsafe_allow_html=True)
 
 # =========================
-# TABS (MATCHING YOUR FORMAT)
+# HEADER
+# =========================
+st.markdown(
+    '<div class="big-title">🥗 CommitBuddy AI</div>',
+    unsafe_allow_html=True
+)
+
+st.markdown(
+    '<div class="creator">Created by Rohan Jamader</div>',
+    unsafe_allow_html=True
+)
+
+st.markdown(
+    '<div class="subtitle">Personalized Nutrition & Commitment Assistant</div>',
+    unsafe_allow_html=True
+)
+
+st.divider()
+
+# =========================
+# TABS
 # =========================
 tab1, tab2, tab3 = st.tabs([
     "Basic Information",
@@ -42,10 +61,10 @@ tab1, tab2, tab3 = st.tabs([
 ])
 
 # =========================
-# TAB 1 — BASIC INFO
+# TAB 1
 # =========================
 with tab1:
-    age = st.number_input("Age", min_value=1, max_value=120, value=30)
+    age = st.number_input("Age", 1, 120, 30)
 
     gender = st.selectbox(
         "Gender",
@@ -57,7 +76,7 @@ with tab1:
 
     activity_level = st.select_slider(
         "Activity Level",
-        options=[
+        [
             "Sedentary",
             "Lightly Active",
             "Moderately Active",
@@ -78,81 +97,73 @@ with tab1:
     )
 
 # =========================
-# TAB 2 — HEALTH DETAILS
+# TAB 2
 # =========================
 with tab2:
-    medical_conditions = st.text_area(
-        "Medical Conditions",
-        placeholder="e.g. Diabetes, BP, Thyroid"
-    )
-
-    medications = st.text_area(
-        "Medications",
-        placeholder="List any medications"
-    )
-
-    allergies = st.text_area(
-        "Allergies",
-        placeholder="Food allergies or intolerances"
-    )
+    medical_conditions = st.text_area("Medical Conditions")
+    medications = st.text_area("Medications")
+    allergies = st.text_area("Allergies")
 
 # =========================
-# TAB 3 — PREFERENCES
+# TAB 3
 # =========================
 with tab3:
-    food_preferences = st.text_area(
-        "Food Preferences",
-        placeholder="Vegetarian, Non-veg, Vegan, etc."
-    )
+    food_preferences = st.text_area("Food Preferences")
 
     cooking_ability = st.select_slider(
         "Cooking Ability",
-        options=["Very Limited", "Basic", "Average", "Advanced"]
+        ["Very Limited", "Basic", "Average", "Advanced"]
     )
 
     budget = st.select_slider(
         "Budget",
-        options=["Very Limited", "Moderate", "Flexible"]
+        ["Very Limited", "Moderate", "Flexible"]
     )
 
-    cultural_factors = st.text_area(
-        "Cultural / Religious Factors",
-        placeholder="Any dietary restrictions"
-    )
+    cultural_factors = st.text_area("Cultural Factors")
 
 # =========================
-# GENERATE PLAN
+# BUTTON
 # =========================
 st.divider()
 
 if st.button("Generate Nutrition Plan"):
-    with st.spinner("CommitBuddy AI is working..."):
-        prompt = f"""
-Create a personalized nutrition plan.
 
-Age: {age}
-Gender: {gender}
-Height: {height}
-Weight: {weight}
-Activity Level: {activity_level}
-Goals: {', '.join(goals) if goals else 'General Health'}
+    if not goals:
+        st.error("Please select at least one goal.")
+    else:
+        with st.spinner("CommitBuddy AI is creating your plan..."):
 
-Medical Conditions: {medical_conditions or 'None'}
-Medications: {medications or 'None'}
-Allergies: {allergies or 'None'}
+            # Example fake plan (Replace with your AI output)
+            plan = f"""
+### 🥗 Personalized Nutrition Plan
 
-Food Preferences: {food_preferences or 'None'}
-Cooking Ability: {cooking_ability}
-Budget: {budget}
-Cultural Factors: {cultural_factors or 'None'}
+**Goals:** {', '.join(goals)}
 
-Return:
-- Daily calorie guidance
-- Meal suggestions
-- Simple tips
+#### 🍳 Breakfast
+- Oatmeal with fruits
+- Boiled eggs
+- Green tea
+
+#### 🍛 Lunch
+- Grilled chicken / Paneer
+- Brown rice
+- Mixed vegetables
+
+#### 🍎 Snacks
+- Nuts
+- Yogurt
+- Fruit bowl
+
+#### 🍲 Dinner
+- Soup + salad
+- Whole wheat roti
+- Protein source
+
+#### 💧 Hydration
+- 2.5–3 Liters water daily
 """
 
-        result = call_llm(prompt)
+        st.success("Plan Generated Successfully!")
 
-    st.success("Your Personalized Plan is Ready!")
-    st.markdown(result)
+        st.markdown(plan)
