@@ -4,52 +4,108 @@ from dotenv import load_dotenv
 from crewai import Agent, Task, Crew, LLM
 from crewai_tools import SerperDevTool
 
+# =============================
+# LOAD ENV
+# =============================
 load_dotenv()
 
-os.environ["SERPER_API_KEY"] = os.getenv("SERPER_API_KEY")
-os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
+SERPER_API_KEY = os.getenv("SERPER_API_KEY")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+
+if not SERPER_API_KEY or not GROQ_API_KEY:
+    st.error("Missing API keys. Add SERPER_API_KEY and GROQ_API_KEY.")
+    st.stop()
 
 search_tool = SerperDevTool()
 
+# =============================
+# CUSTOM PREMIUM UI STYLE
+# =============================
+def apply_custom_style():
+    st.markdown("""
+    <style>
+    .stApp {
+        background-color: #0E1117;
+        color: white;
+    }
+
+    h1 { font-weight: 600; }
+
+    .stTabs [data-baseweb="tab-list"] { gap: 25px; }
+
+    .stTabs [aria-selected="true"] {
+        color: #FF4B4B !important;
+        border-bottom: 2px solid #FF4B4B;
+    }
+
+    .stTextInput input,
+    .stNumberInput input,
+    textarea {
+        background-color: #1A1D24 !important;
+        color: white !important;
+        border-radius: 10px !important;
+    }
+
+    .stButton>button {
+        background-color: #FF4B4B;
+        color: white;
+        border-radius: 10px;
+        padding: 12px 25px;
+        font-weight: 600;
+    }
+
+    .stButton>button:hover {
+        background-color: #FF2E2E;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+# =============================
+# LLM USING GROQ
+# =============================
 def get_llm():
     return LLM(
-        model="gpt-4o-mini",
-        api_key=os.getenv("OPENAI_API_KEY")
+        model="groq/llama-3.1-8b-instant",
+        api_key=GROQ_API_KEY
     )
 
-
+# =============================
+# CREATE AGENTS
+# =============================
 def create_agents():
     llm = get_llm()
 
     nutritionist = Agent(
-    role="Nutrition Specialist",
-    goal="Research and develop personalized nutritional recommendations",
-    backstory="Expert in nutrition",
-    tools=[search_tool],
-    llm=llm
-)
+        role="Nutrition Specialist",
+        goal="Develop personalized nutrition recommendations",
+        backstory="Expert in nutrition science",
+        tools=[search_tool],
+        llm=llm
+    )
 
     medical_specialist = Agent(
         role="Medical Nutrition Therapist",
-        goal="Analyze medical conditions and provide dietary modifications",
-        backstory="Expert in medical nutrition therapy and food-drug interactions",
+        goal="Analyze medical conditions and diet restrictions",
+        backstory="Clinical nutrition expert",
         tools=[search_tool],
-        llm=llm,
-        verbose=True
+        llm=llm
     )
 
     diet_planner = Agent(
         role="Therapeutic Diet Planner",
-        goal="Create practical and enjoyable meal plans",
-        backstory="Transforms clinical requirements into real-world meal plans",
-        llm=llm,
-        verbose=True
+        goal="Create enjoyable meal plans",
+        backstory="Transforms clinical advice into meals",
+        llm=llm
     )
 
     return nutritionist, medical_specialist, diet_planner
 
+# =============================
+# CREATE TASKS
+# =============================
 def create_tasks(nutritionist, medical_specialist, diet_planner, user_info):
-    demographics_research = Task(
+
+    demographics = Task(
         description=f"""
         Age: {user_info['age']}
         Gender: {user_info['gender']}
@@ -59,18 +115,18 @@ def create_tasks(nutritionist, medical_specialist, diet_planner, user_info):
         Goals: {user_info['goals']}
         """,
         agent=nutritionist,
-        expected_output="Detailed nutritional requirements and calorie breakdown"
+        expected_output="Detailed calorie requirements and nutrition breakdown"
     )
 
-    medical_analysis = Task(
+    medical = Task(
         description=f"""
         Conditions: {user_info['medical_conditions']}
         Medications: {user_info['medications']}
         Allergies: {user_info['allergies']}
         """,
         agent=medical_specialist,
-        context=[demographics_research],
-        expected_output="Medical nutrition adjustments and food restrictions"
+        context=[demographics],
+        expected_output="Medical diet restrictions and safe food recommendations"
     )
 
     diet_plan = Task(
@@ -81,59 +137,87 @@ def create_tasks(nutritionist, medical_specialist, diet_planner, user_info):
         Cultural Factors: {user_info['cultural_factors']}
         """,
         agent=diet_planner,
-        context=[demographics_research, medical_analysis],
-        expected_output="Complete personalized diet plan"
+        context=[demographics, medical],
+        expected_output="Complete personalized diet meal plan"
     )
 
-    return [demographics_research, medical_analysis, diet_plan]
+    return [demographics, medical, diet_plan]
 
+
+# =============================
+# RUN CREW
+# =============================
 def run_nutrition_advisor(user_info):
     nutritionist, medical_specialist, diet_planner = create_agents()
     tasks = create_tasks(nutritionist, medical_specialist, diet_planner, user_info)
+
     crew = Crew(
-    agents=[nutritionist, medical_specialist, diet_planner],
-    tasks=tasks
-)
+        agents=[nutritionist, medical_specialist, diet_planner],
+        tasks=tasks
+    )
 
     return crew.kickoff()
 
+# =============================
+# STREAMLIT APP
+# =============================
 def app():
-    st.set_page_config(page_title="COMMITBUDDY-AI", page_icon="🥗", layout="wide")
-    st.title("🥗 COMMITBUDDY-AI")
+    st.set_page_config(page_title="CommitBuddy AI", page_icon="🥗", layout="wide")
+    apply_custom_style()
 
-    tab1, tab2, tab3 = st.tabs(["Basic Information", "Health Details", "Preferences & Lifestyle"])
+    # Header
+    st.markdown("""
+    <h1>🥗 CommitBuddy AI</h1>
+    <p style='color:gray;'>Created by Rohan Jamader</p>
+    <p style='color:gray;'>Personalized Nutrition & Commitment Assistant</p>
+    """, unsafe_allow_html=True)
 
+    tab1, tab2, tab3 = st.tabs([
+        "Basic Information",
+        "Health Details",
+        "Preferences & Lifestyle"
+    ])
+
+    # ---------------- BASIC INFO ----------------
     with tab1:
-        age = st.number_input("Age", 1, 120, 30)
-        gender = st.selectbox("Gender", ["Male", "Female", "Non-binary/Other"])
+        age = st.number_input("Age", 1, 120, 25)
+        gender = st.selectbox("Gender", ["Male", "Female", "Other"])
         height = st.text_input("Height", "5'10\"")
         weight = st.text_input("Weight", "160 lbs")
-        activity_level = st.select_slider(
+
+        activity_level = st.radio(
             "Activity Level",
-            ["Sedentary", "Lightly Active", "Moderately Active", "Very Active", "Extremely Active"]
+            ["Sedentary", "Lightly Active", "Moderately Active", "Very Active", "Extremely Active"],
+            horizontal=True
         )
+
         goals = st.multiselect(
             "Goals",
             ["Weight Loss", "Weight Gain", "Maintenance", "Muscle Building", "General Health"]
         )
 
+    # ---------------- HEALTH ----------------
     with tab2:
         medical_conditions = st.text_area("Medical Conditions")
         medications = st.text_area("Medications")
         allergies = st.text_area("Allergies")
 
+    # ---------------- LIFESTYLE ----------------
     with tab3:
         food_preferences = st.text_area("Food Preferences")
         cooking_ability = st.select_slider(
             "Cooking Ability",
             ["Very Limited", "Basic", "Average", "Advanced"]
         )
+
         budget = st.select_slider(
             "Budget",
             ["Very Limited", "Moderate", "Flexible"]
         )
+
         cultural_factors = st.text_area("Cultural Factors")
 
+    # ---------------- USER DATA ----------------
     user_info = {
         "age": age,
         "gender": gender,
@@ -150,9 +234,17 @@ def app():
         "cultural_factors": cultural_factors or "None"
     }
 
+    # ---------------- BUTTON ----------------
     if st.button("Generate Nutrition Plan"):
-        result = run_nutrition_advisor(user_info)
+
+        with st.spinner("🥗 Creating your personalized nutrition plan..."):
+            result = run_nutrition_advisor(user_info)
+
+        st.success("Plan Generated!")
         st.markdown(result)
 
+# =============================
+# RUN
+# =============================
 if __name__ == "__main__":
     app()
