@@ -1,169 +1,158 @@
+import os
 import streamlit as st
+from dotenv import load_dotenv
+from crewai import Agent, Task, Crew, LLM
+from crewai_tools import SerperDevTool
 
-# =========================
-# PAGE CONFIG
-# =========================
-st.set_page_config(
-    page_title="CommitBuddy AI",
-    page_icon="🥗",
-    layout="wide"
+load_dotenv()
+
+os.environ["SERPER_API_KEY"] = os.getenv("SERPER_API_KEY")
+os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
+
+search_tool = SerperDevTool()
+
+def get_llm():
+    return LLM(
+        model="gpt-4o-mini",
+        api_key=os.getenv("OPENAI_API_KEY")
+    )
+
+
+def create_agents():
+    llm = get_llm()
+
+    nutritionist = Agent(
+    role="Nutrition Specialist",
+    goal="Research and develop personalized nutritional recommendations",
+    backstory="Expert in nutrition",
+    tools=[search_tool],
+    llm=llm
 )
 
-# =========================
-# CUSTOM CSS (MATCH LOOK)
-# =========================
-st.markdown("""
-<style>
-.big-title {
-    font-size: 42px;
-    font-weight: 700;
-}
+    medical_specialist = Agent(
+        role="Medical Nutrition Therapist",
+        goal="Analyze medical conditions and provide dietary modifications",
+        backstory="Expert in medical nutrition therapy and food-drug interactions",
+        tools=[search_tool],
+        llm=llm,
+        verbose=True
+    )
 
-.subtitle {
-    color: #9aa0a6;
-    font-size: 16px;
-}
+    diet_planner = Agent(
+        role="Therapeutic Diet Planner",
+        goal="Create practical and enjoyable meal plans",
+        backstory="Transforms clinical requirements into real-world meal plans",
+        llm=llm,
+        verbose=True
+    )
 
-.creator {
-    font-size: 18px;
-    color: #c9d1d9;
-}
-</style>
-""", unsafe_allow_html=True)
+    return nutritionist, medical_specialist, diet_planner
 
-# =========================
-# HEADER
-# =========================
-st.markdown(
-    '<div class="big-title">🥗 CommitBuddy AI</div>',
-    unsafe_allow_html=True
+def create_tasks(nutritionist, medical_specialist, diet_planner, user_info):
+    demographics_research = Task(
+        description=f"""
+        Age: {user_info['age']}
+        Gender: {user_info['gender']}
+        Height: {user_info['height']}
+        Weight: {user_info['weight']}
+        Activity Level: {user_info['activity_level']}
+        Goals: {user_info['goals']}
+        """,
+        agent=nutritionist,
+        expected_output="Detailed nutritional requirements and calorie breakdown"
+    )
+
+    medical_analysis = Task(
+        description=f"""
+        Conditions: {user_info['medical_conditions']}
+        Medications: {user_info['medications']}
+        Allergies: {user_info['allergies']}
+        """,
+        agent=medical_specialist,
+        context=[demographics_research],
+        expected_output="Medical nutrition adjustments and food restrictions"
+    )
+
+    diet_plan = Task(
+        description=f"""
+        Food Preferences: {user_info['food_preferences']}
+        Cooking Ability: {user_info['cooking_ability']}
+        Budget: {user_info['budget']}
+        Cultural Factors: {user_info['cultural_factors']}
+        """,
+        agent=diet_planner,
+        context=[demographics_research, medical_analysis],
+        expected_output="Complete personalized diet plan"
+    )
+
+    return [demographics_research, medical_analysis, diet_plan]
+
+def run_nutrition_advisor(user_info):
+    nutritionist, medical_specialist, diet_planner = create_agents()
+    tasks = create_tasks(nutritionist, medical_specialist, diet_planner, user_info)
+    crew = Crew(
+    agents=[nutritionist, medical_specialist, diet_planner],
+    tasks=tasks
 )
 
-st.markdown(
-    '<div class="creator">Created by Rohan Jamader</div>',
-    unsafe_allow_html=True
-)
+    return crew.kickoff()
 
-st.markdown(
-    '<div class="subtitle">Personalized Nutrition & Commitment Assistant</div>',
-    unsafe_allow_html=True
-)
+def app():
+    st.set_page_config(page_title="COMMITBUDDY-AI", page_icon="🥗", layout="wide")
+    st.title("🥗 COMMITBUDDY-AI")
 
-st.divider()
+    tab1, tab2, tab3 = st.tabs(["Basic Information", "Health Details", "Preferences & Lifestyle"])
 
-# =========================
-# TABS
-# =========================
-tab1, tab2, tab3 = st.tabs([
-    "Basic Information",
-    "Health Details",
-    "Preferences & Lifestyle"
-])
+    with tab1:
+        age = st.number_input("Age", 1, 120, 30)
+        gender = st.selectbox("Gender", ["Male", "Female", "Non-binary/Other"])
+        height = st.text_input("Height", "5'10\"")
+        weight = st.text_input("Weight", "160 lbs")
+        activity_level = st.select_slider(
+            "Activity Level",
+            ["Sedentary", "Lightly Active", "Moderately Active", "Very Active", "Extremely Active"]
+        )
+        goals = st.multiselect(
+            "Goals",
+            ["Weight Loss", "Weight Gain", "Maintenance", "Muscle Building", "General Health"]
+        )
 
-# =========================
-# TAB 1
-# =========================
-with tab1:
-    age = st.number_input("Age", 1, 120, 30)
+    with tab2:
+        medical_conditions = st.text_area("Medical Conditions")
+        medications = st.text_area("Medications")
+        allergies = st.text_area("Allergies")
 
-    gender = st.selectbox(
-        "Gender",
-        ["Male", "Female", "Non-binary / Other"]
-    )
+    with tab3:
+        food_preferences = st.text_area("Food Preferences")
+        cooking_ability = st.select_slider(
+            "Cooking Ability",
+            ["Very Limited", "Basic", "Average", "Advanced"]
+        )
+        budget = st.select_slider(
+            "Budget",
+            ["Very Limited", "Moderate", "Flexible"]
+        )
+        cultural_factors = st.text_area("Cultural Factors")
 
-    height = st.text_input("Height", "5'10\"")
-    weight = st.text_input("Weight", "160 lbs")
+    user_info = {
+        "age": age,
+        "gender": gender,
+        "height": height,
+        "weight": weight,
+        "activity_level": activity_level,
+        "goals": ", ".join(goals) if goals else "General Health",
+        "medical_conditions": medical_conditions or "None",
+        "medications": medications or "None",
+        "allergies": allergies or "None",
+        "food_preferences": food_preferences or "None",
+        "cooking_ability": cooking_ability,
+        "budget": budget,
+        "cultural_factors": cultural_factors or "None"
+    }
 
-    activity_level = st.select_slider(
-        "Activity Level",
-        [
-            "Sedentary",
-            "Lightly Active",
-            "Moderately Active",
-            "Very Active",
-            "Extremely Active"
-        ]
-    )
+    if st.button("Generate Nutrition Plan"):
+        result = run_nutrition_advisor(user_info)
+        st.markdown(result)
 
-    goals = st.multiselect(
-        "Goals",
-        [
-            "Weight Loss",
-            "Weight Gain",
-            "Muscle Building",
-            "Maintenance",
-            "General Health"
-        ]
-    )
-
-# =========================
-# TAB 2
-# =========================
-with tab2:
-    medical_conditions = st.text_area("Medical Conditions")
-    medications = st.text_area("Medications")
-    allergies = st.text_area("Allergies")
-
-# =========================
-# TAB 3
-# =========================
-with tab3:
-    food_preferences = st.text_area("Food Preferences")
-
-    cooking_ability = st.select_slider(
-        "Cooking Ability",
-        ["Very Limited", "Basic", "Average", "Advanced"]
-    )
-
-    budget = st.select_slider(
-        "Budget",
-        ["Very Limited", "Moderate", "Flexible"]
-    )
-
-    cultural_factors = st.text_area("Cultural Factors")
-
-# =========================
-# BUTTON
-# =========================
-st.divider()
-
-if st.button("Generate Nutrition Plan"):
-
-    if not goals:
-        st.error("Please select at least one goal.")
-    else:
-        with st.spinner("CommitBuddy AI is creating your plan..."):
-
-            # Example fake plan (Replace with your AI output)
-            plan = f"""
-### 🥗 Personalized Nutrition Plan
-
-**Goals:** {', '.join(goals)}
-
-#### 🍳 Breakfast
-- Oatmeal with fruits
-- Boiled eggs
-- Green tea
-
-#### 🍛 Lunch
-- Grilled chicken / Paneer
-- Brown rice
-- Mixed vegetables
-
-#### 🍎 Snacks
-- Nuts
-- Yogurt
-- Fruit bowl
-
-#### 🍲 Dinner
-- Soup + salad
-- Whole wheat roti
-- Protein source
-
-#### 💧 Hydration
-- 2.5–3 Liters water daily
-"""
-
-        st.success("Plan Generated Successfully!")
-
-        st.markdown(plan)
+if __name__ == "__main__":
+    app()
